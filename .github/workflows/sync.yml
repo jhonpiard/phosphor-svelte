@@ -1,0 +1,107 @@
+name: Sync upstream Phosphor Icons
+
+on:
+  # Run daily at midnight UTC
+  schedule:
+    - cron: "0 0 * * *"
+  # Allow manual trigger with optional version pin
+  workflow_dispatch:
+    inputs:
+      core_version:
+        description: "@phosphor-icons/core version to pin (e.g. 2.0.8). Leave blank for latest."
+        required: false
+        default: ""
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: Sync & regenerate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Get current @phosphor-icons/core version
+        id: current
+        run: |
+          CURRENT=$(node -p "require('./node_modules/@phosphor-icons/core/package.json').version" 2>/dev/null || echo "none")
+          echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
+
+      - name: Install dependencies
+        run: |
+          if [ -n "${{ github.event.inputs.core_version }}" ]; then
+            pnpm add -D @phosphor-icons/core@${{ github.event.inputs.core_version }}
+          else
+            pnpm add -D @phosphor-icons/core@latest
+          fi
+          pnpm install --frozen-lockfile false
+
+      - name: Get new @phosphor-icons/core version
+        id: new
+        run: |
+          NEW=$(node -p "require('./node_modules/@phosphor-icons/core/package.json').version")
+          echo "version=$NEW" >> "$GITHUB_OUTPUT"
+
+      - name: Regenerate components
+        if: steps.current.outputs.version != steps.new.outputs.version || github.event_name == 'workflow_dispatch'
+        run: pnpm assemble
+
+      - name: Check for changes
+        id: changes
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump package version to match core
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          NEW_VERSION="${{ steps.new.outputs.version }}"
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json','utf8'));
+            pkg.version = '$NEW_VERSION';
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Create Pull Request
+        if: steps.changes.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "chore: sync @phosphor-icons/core@${{ steps.new.outputs.version }}"
+          title: "🔄 Sync @phosphor-icons/core v${{ steps.new.outputs.version }}"
+          body: |
+            Automated sync from upstream `@phosphor-icons/core`.
+
+            | | Before | After |
+            |---|---|---|
+            | `@phosphor-icons/core` | `${{ steps.current.outputs.version }}` | `${{ steps.new.outputs.version }}` |
+
+            This PR was opened automatically by the [Sync workflow](.github/workflows/sync.yml).
+          branch: "sync/core-v${{ steps.new.outputs.version }}"
+          delete-branch: true
+          labels: |
+            automated
+            dependencies

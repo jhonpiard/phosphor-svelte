@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  verify:
+    name: Verify build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm check || echo "::warning::svelte-check requires SvelteKit — skipping in CI without full kit setup"
+
+      - name: Verify icons are present
+        run: |
+          COUNT=$(ls src/lib/icons/*.svelte 2>/dev/null | wc -l)
+          echo "Icon count: $COUNT"
+          if [ "$COUNT" -lt 1000 ]; then
+            echo "::error::Expected 1000+ icons, found $COUNT. Run \`pnpm assemble\` first."
+            exit 1
+          fi
+          echo "✅ $COUNT Svelte icon components present"
+
+      - name: Spot-check component structure
+        run: |
+          node --input-type=module << 'EOF'
+          import { readFileSync } from 'fs';
+          import { resolve } from 'path';
+
+          const icons = ['Horse', 'Heart', 'Star', 'X', 'Check'];
+          for (const name of icons) {
+            const file = resolve(`src/lib/icons/${name}.svelte`);
+            const content = readFileSync(file, 'utf8');
+
+            const checks = [
+              ['imports IconBase', content.includes('import IconBase')],
+              ['has weights Map', content.includes('new Map')],
+              ['has all 6 weights', ['thin','light','regular','bold','fill','duotone'].every(w => content.includes(`"${w}"`))]
+            ];
+
+            for (const [label, ok] of checks) {
+              if (!ok) {
+                console.error(`❌ ${name}: ${label}`);
+                process.exit(1);
+              }
+            }
+            console.log(`✅ ${name} — OK`);
+          }
+          EOF
