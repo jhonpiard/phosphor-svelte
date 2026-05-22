@@ -3,25 +3,26 @@
   "version": "2.0.8",
   "description": "Phosphor Icons for Svelte — auto-generated from @phosphor-icons/core",
   "type": "module",
-  "svelte": "./src/lib/index.ts",
+  "svelte": "./dist/index.js",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "svelte": "./src/lib/index.ts",
-      "import": "./dist/index.js"
+      "svelte": "./dist/index.js",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./package.json": "./package.json"
   },
   "files": [
-    "dist",
-    "src/lib"
+    "dist"
   ],
   "scripts": {
     "assemble": "tsx scripts/assemble.ts",
     "build": "svelte-kit sync && svelte-package -i src/lib",
+    "prepare": "svelte-kit sync && svelte-package -i src/lib",
     "dev": "vite dev",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier --write \"src/**/*.{ts,svelte}\" \"scripts/**/*.ts\""
@@ -32,6 +33,7 @@
     "@sveltejs/kit": "^2.60.1",
     "@sveltejs/package": "^2.5.7",
     "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@types/node": "^25.9.1",
     "chalk": "^5.6.2",
     "fast-xml-parser": "^5.8.0",
     "prettier": "^3.8.3",

@@ -6,12 +6,6 @@ const config = {
   preprocess: vitePreprocess(),
   kit: {
     adapter: adapter(),
-    package: {
-      dir: "dist",
-      emitTypes: true,
-      exports: (filepath) => filepath.endsWith("index.ts"),
-      files: () => true,
-    },
   },
 };
 
